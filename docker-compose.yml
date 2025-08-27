@@ -1,0 +1,109 @@
+services:
+  # Servicio principal de Laravel con Geoespacial integrado
+  app:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: laravel_app
+    volumes:
+      - .:/var/www/html
+      - ./storage:/var/www/html/storage
+      - ./bootstrap/cache:/var/www/html/bootstrap/cache
+    networks:
+      - app-network
+    depends_on:
+      - db
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_DATABASE=geoespacial_db
+      - DB_USERNAME=geoespacial_user
+      - DB_PASSWORD=OBKWR7y0ULudt48x8o9xXctVv1f8vtSiAcJXUk2wZz1Sx6EIWkxVZBdDu0IjAVRv
+    command: php-fpm
+
+  # Servicio de Nginx
+  nginx:
+    image: nginx:alpine
+    container_name: laravel_nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - .:/var/www/html
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - app-network
+    depends_on:
+      - app
+
+  # Servicio de Laravel Reverb (WebSockets)
+  reverb:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: laravel_reverb
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080 --no-interaction
+    ports:
+      - "8081:8080"
+    volumes:
+      - .:/var/www/html
+    networks:
+      - app-network
+    depends_on:
+      - app
+      - db
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_DATABASE=geoespacial_db
+      - DB_USERNAME=geoespacial_user
+      - DB_PASSWORD=OBKWR7y0ULudt48x8o9xXctVv1f8vtSiAcJXUk2wZz1Sx6EIWkxVZBdDu0IjAVRv
+
+  # Worker para el servicio geoespacial (opcional, puede ejecutarse desde app)
+  worker:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: laravel_worker
+    command: php artisan geospatial:realtime --interval=60
+    volumes:
+      - .:/var/www/html
+    networks:
+      - app-network
+    depends_on:
+      - app
+      - db
+      - reverb
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_DATABASE=geoespacial_db
+      - DB_USERNAME=geoespacial_user
+      - DB_PASSWORD=OBKWR7y0ULudt48x8o9xXctVv1f8vtSiAcJXUk2wZz1Sx6EIWkxVZBdDu0IjAVRv
+    restart: unless-stopped
+    profiles:
+      - worker  # Solo se ejecuta si se especifica el perfil
+
+  # Base de datos PostgreSQL
+  db:
+    image: postgres:13-alpine
+    container_name: laravel_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: geoespacial_db
+      POSTGRES_USER: geoespacial_user
+      POSTGRES_PASSWORD: OBKWR7y0ULudt48x8o9xXctVv1f8vtSiAcJXUk2wZz1Sx6EIWkxVZBdDu0IjAVRv
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - app-network
+
+volumes:
+  pg_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge
