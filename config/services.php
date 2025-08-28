@@ -35,4 +35,15 @@ return [
         ],
     ],
 
+    // OpenWeather API Configuration
+
+    'openweather' => [
+        'api_key' => env('WEATHER_API_KEY'),
+        'base_url' => env('WEATHER_API_BASE_URL', 'https://api.openweathermap.org/data/2.5'),
+        'timeout' => env('WEATHER_API_TIMEOUT', 10),
+        'units' => env('WEATHER_API_UNITS', 'metric'),
+        'lang' => env('WEATHER_API_LANG', 'es'),
+        'verify_ssl' => env('WEATHER_API_VERIFY_SSL', true),
+    ],
+
 ];

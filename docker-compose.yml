@@ -41,11 +41,11 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: laravel_reverb
+    volumes:
+      - .:/var/www/html
     command: php artisan reverb:start --host=0.0.0.0 --port=8080 --no-interaction
     ports:
       - "8081:8080"
-    volumes:
-      - .:/var/www/html
     networks:
       - app-network
     depends_on:
@@ -64,9 +64,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: laravel_worker
-    command: php artisan geospatial:realtime --interval=60
     volumes:
       - .:/var/www/html
+    command: php artisan geospatial:realtime --interval=60
     networks:
       - app-network
     depends_on:
