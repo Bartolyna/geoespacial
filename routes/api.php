@@ -10,21 +10,30 @@ Route::get('/user', function (Request $request) {
 
 
 Route::prefix('geospatial')->group(function () {
-    
-
+    // Rutas de solo lectura (más permisivas)
     Route::get('/locations', [GeospatialController::class, 'getLocations']);
-    Route::post('/locations', [GeospatialController::class, 'createLocation']);
     Route::get('/locations/{location}', [GeospatialController::class, 'getLocationWeather']);
-    Route::put('/locations/{location}/update', [GeospatialController::class, 'updateLocationWeather']);
-    Route::patch('/locations/{location}/toggle', [GeospatialController::class, 'toggleLocation']);
-    Route::delete('/locations/{location}', [GeospatialController::class, 'deleteLocation']);
-
     Route::get('/summary', [GeospatialController::class, 'getSummary']);
     Route::get('/stats', [GeospatialController::class, 'getServiceStats']);
+    
+    // Rutas de escritura (más restrictivas)
+    Route::middleware(['throttle:10,1'])->group(function () { // 10 requests por minuto
+        Route::post('/locations', [GeospatialController::class, 'createLocation']);
+        Route::put('/locations/{location}/update', [GeospatialController::class, 'updateLocationWeather']);
+        Route::patch('/locations/{location}/toggle', [GeospatialController::class, 'toggleLocation']);
+        Route::delete('/locations/{location}', [GeospatialController::class, 'deleteLocation']);
+    });
 });
 
 
-Route::get('/websocket/stats', function () {
+Route::get('/websocket/stats', function (Request $request) {
+    // Loggear acceso a estadísticas sensibles
+    Log::info('Acceso a estadísticas WebSocket', [
+        'ip' => $request->ip(),
+        'user_agent' => $request->userAgent(),
+        'timestamp' => now()->toISOString(),
+    ]);
+    
     try {
         // Verificar estado del servidor Reverb
         $reverbHost = config('broadcasting.connections.reverb.options.host', 'reverb');
@@ -123,7 +132,17 @@ Route::get('/websocket/stats', function () {
     }
 });
 
-Route::post('/websocket/heartbeat', function (\Illuminate\Http\Request $request) {
+Route::post('/websocket/heartbeat', function (Request $request) {
+    // Loggear heartbeat con validación
+    $validated = $request->validate([
+        'url' => 'required|url|max:500',
+    ]);
+    
+    Log::debug('Heartbeat WebSocket recibido', [
+        'ip' => $request->ip(),
+        'url' => $validated['url'],
+        'timestamp' => now()->toISOString(),
+    ]);
     try {
         $connectionId = $request->input('connection_id', 'unknown');
         $tabId = $request->input('tab_id', 'unknown');

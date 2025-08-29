@@ -13,7 +13,14 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Middleware de seguridad para APIs
+        $middleware->api([
+            \App\Http\Middleware\LogRequests::class,
+            \App\Http\Middleware\SanitizeInput::class,
+        ]);
+        
+        // Rate limiting para APIs
+        $middleware->throttleApi('60,1'); // 60 requests por minuto por IP
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

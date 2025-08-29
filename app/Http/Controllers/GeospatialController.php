@@ -9,6 +9,7 @@ use App\Services\GeospatialWebSocketService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Log;
 
 class GeospatialController extends Controller
 {
@@ -43,18 +44,71 @@ class GeospatialController extends Controller
     public function createLocation(Request $request): JsonResponse
     {
         try {
+            // Loggear intento de creación
+            Log::info('Intento de crear nueva ubicación', [
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'input_keys' => array_keys($request->all()),
+            ]);
+
             $validated = $request->validate([
-                'name' => 'required|string|max:255',
-                'city' => 'required|string|max:255',
-                'country' => 'required|string|max:255',
-                'state' => 'nullable|string|max:255',
+                'name' => [
+                    'required',
+                    'string',
+                    'max:255',
+                    'regex:/^[a-zA-Z0-9\s\-\_\.\,]+$/', // Solo caracteres seguros
+                ],
+                'city' => [
+                    'required',
+                    'string',
+                    'max:255',
+                    'regex:/^[a-zA-Z\s\-\_\.]+$/', // Solo letras, espacios y guiones
+                ],
+                'country' => [
+                    'required',
+                    'string',
+                    'max:255',
+                    'regex:/^[a-zA-Z\s\-\_\.]+$/',
+                ],
+                'state' => [
+                    'nullable',
+                    'string',
+                    'max:255',
+                    'regex:/^[a-zA-Z\s\-\_\.]*$/',
+                ],
                 'latitude' => 'required|numeric|between:-90,90',
                 'longitude' => 'required|numeric|between:-180,180',
                 'active' => 'boolean',
-                'metadata' => 'nullable|array',
+                'metadata' => 'nullable|array|max:10', // Máximo 10 elementos en metadata
+                'metadata.*' => 'string|max:500', // Cada elemento de metadata máximo 500 chars
             ]);
 
+            // Validación adicional anti-XSS
+            foreach (['name', 'city', 'country', 'state'] as $field) {
+                if (isset($validated[$field])) {
+                    if ($this->containsXSS($validated[$field])) {
+                        Log::warning('Intento de XSS detectado', [
+                            'ip' => $request->ip(),
+                            'field' => $field,
+                            'value' => $validated[$field],
+                        ]);
+                        
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Contenido no permitido detectado',
+                        ], 422);
+                    }
+                }
+            }
+
             $location = Location::create($validated);
+
+            // Loggear éxito
+            Log::info('Ubicación creada exitosamente', [
+                'ip' => $request->ip(),
+                'location_id' => $location->id,
+                'location_name' => $location->name,
+            ]);
 
             // Obtener datos meteorológicos iniciales
             $weatherData = $this->weatherService->fetchAndStoreWeatherData($location);
@@ -72,18 +126,59 @@ class GeospatialController extends Controller
             ], 201);
 
         } catch (ValidationException $e) {
+            Log::warning('Error de validación en createLocation', [
+                'ip' => $request->ip(),
+                'errors' => $e->errors(),
+                'input' => $request->except(['password', 'token']),
+            ]);
+            
             return response()->json([
                 'status' => 'error',
                 'message' => 'Datos de validación incorrectos',
                 'errors' => $e->errors(),
             ], 422);
         } catch (\Exception $e) {
+            Log::error('Error al crear ubicación', [
+                'ip' => $request->ip(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
             return response()->json([
                 'status' => 'error',
                 'message' => 'Error al crear la ubicación',
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Detectar posibles ataques XSS
+     */
+    private function containsXSS(string $input): bool
+    {
+        $xssPatterns = [
+            '/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/mi',
+            '/javascript:/i',
+            '/on\w+\s*=/i',
+            '/<iframe/i',
+            '/<object/i',
+            '/<embed/i',
+            '/<link/i',
+            '/<meta/i',
+            '/eval\s*\(/i',
+            '/expression\s*\(/i',
+            '/vbscript:/i',
+            '/data:text\/html/i',
+        ];
+        
+        foreach ($xssPatterns as $pattern) {
+            if (preg_match($pattern, $input)) {
+                return true;
+            }
+        }
+        
+        return false;
     }
 
     // Obtener datos meteorológicos 
