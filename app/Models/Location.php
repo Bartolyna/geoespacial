@@ -20,6 +20,7 @@ class Location extends Model
         'openweather_id',
         'active',
         'metadata',
+        'geometry',
     ];
 
     protected $casts = [
@@ -56,9 +57,43 @@ class Location extends Model
     /**
      * Obtener coordenadas como string
      */
-
     public function getCoordinatesAttribute(): string
     {
         return "{$this->latitude},{$this->longitude}";
+    }
+
+    /**
+     * Scope para búsquedas PostGIS por distancia
+     */
+    public function scopeWithinDistance($query, $latitude, $longitude, $radius)
+    {
+        return $query->whereRaw(
+            'ST_DWithin(geometry, ST_SetSRID(ST_MakePoint(?, ?), 4326), ?)',
+            [$longitude, $latitude, $radius]
+        );
+    }
+
+    /**
+     * Scope para ordenar por distancia
+     */
+    public function scopeOrderByDistance($query, $latitude, $longitude)
+    {
+        return $query->orderByRaw(
+            'ST_Distance(geometry, ST_SetSRID(ST_MakePoint(?, ?), 4326))',
+            [$longitude, $latitude]
+        );
+    }
+
+    /**
+     * Obtener distancia desde un punto
+     */
+    public function getDistanceFromAttribute($latitude, $longitude): float
+    {
+        $result = \DB::selectOne(
+            'SELECT ST_Distance(geometry, ST_SetSRID(ST_MakePoint(?, ?), 4326)) as distance FROM locations WHERE id = ?',
+            [$longitude, $latitude, $this->id]
+        );
+
+        return $result ? (float) $result->distance : 0.0;
     }
 }

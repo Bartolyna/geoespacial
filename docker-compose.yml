@@ -108,9 +108,9 @@ services:
     profiles:
       - queue  # Solo se ejecuta si se especifica el perfil
 
-  # Base de datos PostgreSQL
+  # Base de datos PostgreSQL con extensión PostGIS
   db:
-    image: postgres:13-alpine
+    image: postgis/postgis:13-3.1-alpine
     container_name: laravel_db
     restart: unless-stopped
     environment:
@@ -120,6 +120,7 @@ services:
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
     volumes:
       - pg_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
     ports:
       - "5433:5432"
     networks:

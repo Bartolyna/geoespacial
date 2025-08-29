@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\GeospatialController;
+use App\Http\Controllers\PostGISController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -22,6 +23,25 @@ Route::prefix('geospatial')->group(function () {
         Route::put('/locations/{location}/update', [GeospatialController::class, 'updateLocationWeather']);
         Route::patch('/locations/{location}/toggle', [GeospatialController::class, 'toggleLocation']);
         Route::delete('/locations/{location}', [GeospatialController::class, 'deleteLocation']);
+    });
+});
+
+// Rutas PostGIS para operaciones geoespaciales avanzadas
+Route::prefix('postgis')->group(function () {
+    // Rutas de solo lectura (información y consultas)
+    Route::get('/info', [PostGISController::class, 'getInfo']);
+    Route::get('/stats', [PostGISController::class, 'getGeographicStats']);
+    Route::get('/centroid', [PostGISController::class, 'getCentroid']);
+    
+    // Búsquedas geoespaciales
+    Route::post('/search/radius', [PostGISController::class, 'findWithinRadius']);
+    Route::post('/search/nearest', [PostGISController::class, 'getNearestLocations']);
+    Route::post('/search/polygon', [PostGISController::class, 'findInPolygon']);
+    Route::post('/distance', [PostGISController::class, 'calculateDistance']);
+    
+    // Operaciones más intensivas (con rate limiting estricto)
+    Route::middleware(['throttle:5,1'])->group(function () { // 5 requests por minuto
+        Route::post('/locations/{location}/buffer', [PostGISController::class, 'createBuffer']);
     });
 });
 

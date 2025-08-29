@@ -1,6 +1,6 @@
 # 🌍 Dashboard Geoespacial en Tiempo Real
 
-Sistema de monitoreo meteorológico con datos en tiempo real y WebSockets.
+Sistema de monitoreo meteorológico con datos en tiempo real, WebSockets y **PostGIS**.
 
 ## 🚀 Inicio Rápido
 
@@ -21,6 +21,23 @@ docker-compose up -d
 - ✅ Temperaturas se actualizan solas cada 60 segundos
 - ✅ Agregar nuevas ubicaciones (aparecen al instante)
 - ✅ Ver cuántos usuarios están conectados
+- ✅ **Búsquedas geoespaciales avanzadas con PostGIS**
+
+## 🗺️ PostGIS - Funcionalidades Geoespaciales
+
+### Probar PostGIS
+```powershell
+# Información del sistema PostGIS
+Invoke-WebRequest -Uri "http://localhost:8080/api/postgis/info" | ConvertFrom-Json
+
+# Buscar ubicaciones en 50km de Nueva York
+Invoke-WebRequest -Uri "http://localhost:8080/api/postgis/search/radius" -Method POST -Headers @{"Content-Type"="application/json"} -Body '{"latitude": 40.7128, "longitude": -74.0060, "radius": 50000}' | ConvertFrom-Json
+
+# Estadísticas geográficas
+Invoke-WebRequest -Uri "http://localhost:8080/api/postgis/stats" | ConvertFrom-Json
+```
+
+### 📖 [Ver documentación completa de PostGIS](docs/POSTGIS.md)
 
 ## 🔧 Comandos Útiles
 
