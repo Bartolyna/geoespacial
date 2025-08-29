@@ -150,6 +150,17 @@ class OpenWeatherService
         ];
     }
 
+            return null;
+
+        } catch (\Exception $e) {
+            Log::error('Excepción al obtener datos meteorológicos', [
+                'location_id' => $location->id,
+                'error' => $e->getMessage()
+            ]);
+
+            return null;
+        }
+    }
 
     //Pronóstico ubicacion
     public function getForecast(Location $location, int $days = 5): ?array

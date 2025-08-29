@@ -83,11 +83,9 @@ class GeospatialRealtimeCommand extends Command
                 // Actualizar todas las ubicaciones
                 $this->webSocketService->updateAllLocations();
                 
-                // Enviar resumen cada 5 iteraciones
-                if ($iteration % 5 === 0) {
-                    $this->line('📤 Enviando resumen WebSocket...');
-                    $this->webSocketService->broadcastSummary();
-                }
+                // Enviar resumen en cada iteración para mantener el frontend actualizado
+                $this->line('📤 Enviando resumen WebSocket...');
+                $this->webSocketService->broadcastSummary();
                 
                 $endTime = microtime(true);
                 $executionTime = round($endTime - $startTime, 2);

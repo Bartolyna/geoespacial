@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test de Múltiples Conexiones WebSocket</title>
+    <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .connection-box { 
+            border: 1px solid #ccc; 
+            margin: 10px; 
+            padding: 15px; 
+            border-radius: 5px; 
+        }
+        .connected { background-color: #d4edda; border-color: #c3e6cb; }
+        .connecting { background-color: #fff3cd; border-color: #ffeaa7; }
+        .disconnected { background-color: #f8d7da; border-color: #f5c6cb; }
+        .logs { 
+            height: 200px; 
+            overflow-y: scroll; 
+            background: #f8f9fa; 
+            padding: 10px; 
+            border: 1px solid #dee2e6; 
+            font-family: monospace; 
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test de Múltiples Conexiones WebSocket</h1>
+    <p>Esta página crea múltiples conexiones para probar el manejo concurrente</p>
+    
+    <button onclick="createConnection()">Crear Nueva Conexión</button>
+    <button onclick="disconnectAll()">Desconectar Todas</button>
+    <button onclick="clearLogs()">Limpiar Logs</button>
+    
+    <div id="connections"></div>
+    
+    <h3>Logs Globales</h3>
+    <div id="global-logs" class="logs"></div>
+
+    <script>
+        let connections = [];
+        let connectionCounter = 0;
+
+        function log(message, connectionId = null) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logMessage = `[${timestamp}] ${connectionId ? `[${connectionId}] ` : ''}${message}`;
+            
+            // Log global
+            const globalLogs = document.getElementById('global-logs');
+            globalLogs.innerHTML += logMessage + '\n';
+            globalLogs.scrollTop = globalLogs.scrollHeight;
+            
+            // Log específico de conexión
+            if (connectionId) {
+                const connectionLogs = document.getElementById(`logs-${connectionId}`);
+                if (connectionLogs) {
+                    connectionLogs.innerHTML += logMessage + '\n';
+                    connectionLogs.scrollTop = connectionLogs.scrollHeight;
+                }
+            }
+            
+            console.log(logMessage);
+        }
+
+        async function getWebSocketConfig() {
+            try {
+                const response = await fetch('http://localhost:8080/api/websocket/info');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return await response.json();
+            } catch (error) {
+                log('Error obteniendo configuración WebSocket: ' + error.message);
+                throw error;
+            }
+        }
+
+        function generateConnectionId() {
+            return 'test_conn_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        }
+
+        async function createConnection() {
+            connectionCounter++;
+            const connectionId = generateConnectionId();
+            
+            log(`Creando conexión #${connectionCounter}...`, connectionId);
+            
+            // Crear elemento UI para esta conexión
+            const connectionDiv = document.createElement('div');
+            connectionDiv.className = 'connection-box connecting';
+            connectionDiv.id = `connection-${connectionId}`;
+            connectionDiv.innerHTML = `
+                <h4>Conexión #${connectionCounter} - ID: ${connectionId}</h4>
+                <div>Estado: <span id="status-${connectionId}">Conectando...</span></div>
+                <div>Socket ID: <span id="socket-${connectionId}">N/A</span></div>
+                <div>Mensajes recibidos: <span id="messages-${connectionId}">0</span></div>
+                <button onclick="disconnectConnection('${connectionId}')">Desconectar</button>
+                <div class="logs" id="logs-${connectionId}"></div>
+            `;
+            
+            document.getElementById('connections').appendChild(connectionDiv);
+            
+            try {
+                const config = await getWebSocketConfig();
+                log('Configuración WebSocket obtenida', connectionId);
+                
+                const pusher = new Pusher(config.app_key, {
+                    wsHost: config.reverb_host,
+                    wsPort: config.reverb_port,
+                    wssPort: config.reverb_port,
+                    forceTLS: false,
+                    enabledTransports: ['ws'],
+                    disableStats: true,
+                    cluster: 'mt1',
+                    encrypted: false,
+                    debug: false,
+                    connectionTimeout: 10000,
+                    activityTimeout: 120000
+                });
+
+                let messageCount = 0;
+
+                pusher.connection.bind('connected', () => {
+                    log('✅ WebSocket conectado', connectionId);
+                    updateConnectionStatus(connectionId, 'Conectado', 'connected');
+                    document.getElementById(`socket-${connectionId}`).textContent = pusher.connection.socket_id;
+                    
+                    // Suscribirse al canal
+                    const channel = pusher.subscribe(config.channels.main);
+                    
+                    channel.bind('weather.updated', (data) => {
+                        messageCount++;
+                        log(`🌡️ weather.updated: ${data.location.name} = ${data.weather.temperature}°C`, connectionId);
+                        document.getElementById(`messages-${connectionId}`).textContent = messageCount;
+                    });
+
+                    channel.bind('weather.summary', (data) => {
+                        messageCount++;
+                        log(`📊 weather.summary: ${data.length} ubicaciones`, connectionId);
+                        document.getElementById(`messages-${connectionId}`).textContent = messageCount;
+                    });
+
+                    channel.bind('pusher:subscription_succeeded', () => {
+                        log('✅ Suscripción exitosa al canal', connectionId);
+                    });
+                });
+
+                pusher.connection.bind('disconnected', () => {
+                    log('❌ WebSocket desconectado', connectionId);
+                    updateConnectionStatus(connectionId, 'Desconectado', 'disconnected');
+                });
+
+                pusher.connection.bind('error', (error) => {
+                    log('⚠️ Error: ' + (error.message || 'Error desconocido'), connectionId);
+                    updateConnectionStatus(connectionId, 'Error', 'disconnected');
+                });
+
+                pusher.connection.bind('failed', () => {
+                    log('❌ Conexión falló', connectionId);
+                    updateConnectionStatus(connectionId, 'Falló', 'disconnected');
+                });
+
+                // Guardar referencia
+                connections.push({
+                    id: connectionId,
+                    pusher: pusher,
+                    number: connectionCounter
+                });
+
+            } catch (error) {
+                log('❌ Error creando conexión: ' + error.message, connectionId);
+                updateConnectionStatus(connectionId, 'Error', 'disconnected');
+            }
+        }
+
+        function updateConnectionStatus(connectionId, status, cssClass) {
+            const connectionDiv = document.getElementById(`connection-${connectionId}`);
+            const statusSpan = document.getElementById(`status-${connectionId}`);
+            
+            if (connectionDiv && statusSpan) {
+                connectionDiv.className = `connection-box ${cssClass}`;
+                statusSpan.textContent = status;
+            }
+        }
+
+        function disconnectConnection(connectionId) {
+            const connection = connections.find(c => c.id === connectionId);
+            if (connection) {
+                connection.pusher.disconnect();
+                log('🔌 Conexión desconectada manualmente', connectionId);
+                connections = connections.filter(c => c.id !== connectionId);
+            }
+        }
+
+        function disconnectAll() {
+            connections.forEach(connection => {
+                connection.pusher.disconnect();
+                log('🔌 Conexión desconectada', connection.id);
+            });
+            connections = [];
+            log('🔌 Todas las conexiones desconectadas');
+        }
+
+        function clearLogs() {
+            document.getElementById('global-logs').innerHTML = '';
+            connections.forEach(connection => {
+                const logs = document.getElementById(`logs-${connection.id}`);
+                if (logs) logs.innerHTML = '';
+            });
+        }
+
+        // Crear primera conexión automáticamente
+        window.addEventListener('load', () => {
+            log('🚀 Página cargada, creando primera conexión...');
+            createConnection();
+        });
+    </script>
+</body>
+</html>

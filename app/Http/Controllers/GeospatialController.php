@@ -59,6 +59,9 @@ class GeospatialController extends Controller
             // Obtener datos meteorológicos iniciales
             $weatherData = $this->weatherService->fetchAndStoreWeatherData($location);
 
+            // Enviar resumen actualizado a todos los clientes
+            $this->webSocketService->broadcastSummary();
+
             return response()->json([
                 'status' => 'success',
                 'message' => 'Ubicación creada exitosamente',

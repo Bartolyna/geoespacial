@@ -83,6 +83,31 @@ services:
     profiles:
       - worker  # Solo se ejecuta si se especifica el perfil
 
+  # Queue Worker para procesar eventos de broadcasting
+  queue-worker:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: laravel_queue
+    volumes:
+      - .:/var/www/html
+    command: php artisan queue:work --timeout=60 --sleep=3 --tries=3
+    networks:
+      - app-network
+    depends_on:
+      - app
+      - db
+      - reverb
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_DATABASE=geoespacial_db
+      - DB_USERNAME=geoespacial_user
+      - DB_PASSWORD=OBKWR7y0ULudt48x8o9xXctVv1f8vtSiAcJXUk2wZz1Sx6EIWkxVZBdDu0IjAVRv
+    restart: unless-stopped
+    profiles:
+      - queue  # Solo se ejecuta si se especifica el perfil
+
   # Base de datos PostgreSQL
   db:
     image: postgres:13-alpine
