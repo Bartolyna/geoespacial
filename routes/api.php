@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\GeospatialController;
 use App\Http\Controllers\PostGISController;
+use App\Http\Controllers\MemoryOptimizationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -218,4 +219,21 @@ Route::get('/websocket/info', function () {
             'summary' => config('geospatial.channels.summary', 'geospatial.summary'),
         ]
     ]);
+});
+
+// Rutas de optimización de memoria para estructuras de datos avanzadas
+Route::prefix('memory-optimization')->group(function () {
+    // Demostración completa del sistema
+    Route::get('/demonstration', [MemoryOptimizationController::class, 'demonstration']);
+    
+    // Estadísticas en tiempo real
+    Route::get('/stats', [MemoryOptimizationController::class, 'stats']);
+    
+    // Optimización manual de memoria
+    Route::post('/optimize', [MemoryOptimizationController::class, 'optimize']);
+    
+    // Benchmark de rendimiento de estructuras de datos
+    Route::middleware(['throttle:2,1'])->group(function () { // 2 requests por minuto para benchmarks
+        Route::post('/benchmark', [MemoryOptimizationController::class, 'benchmark']);
+    });
 });
