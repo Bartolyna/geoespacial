@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Services\OpenWeatherService;
 use App\Services\GeospatialWebSocketService;
 use App\Services\PostGISService;
+use App\Services\LLMService;
 use Illuminate\Support\ServiceProvider;
 
 class GeospatialServiceProvider extends ServiceProvider
@@ -24,6 +25,10 @@ class GeospatialServiceProvider extends ServiceProvider
 
         $this->app->singleton(PostGISService::class, function ($app) {
             return new PostGISService();
+        });
+
+        $this->app->singleton(LLMService::class, function ($app) {
+            return new LLMService();
         });
     }
 

@@ -3,6 +3,7 @@
 use App\Http\Controllers\GeospatialController;
 use App\Http\Controllers\PostGISController;
 use App\Http\Controllers\MemoryOptimizationController;
+use App\Http\Controllers\TechnicalReportController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -43,6 +44,27 @@ Route::prefix('postgis')->group(function () {
     // Operaciones más intensivas (con rate limiting estricto)
     Route::middleware(['throttle:5,1'])->group(function () { // 5 requests por minuto
         Route::post('/locations/{location}/buffer', [PostGISController::class, 'createBuffer']);
+    });
+});
+
+// Rutas para reportes técnicos con LLM
+Route::prefix('technical-reports')->group(function () {
+    // Rutas de solo lectura
+    Route::get('/', [TechnicalReportController::class, 'index']);
+    Route::get('/stats', [TechnicalReportController::class, 'stats']);
+    Route::get('/types', [TechnicalReportController::class, 'types']);
+    Route::get('/{report}', [TechnicalReportController::class, 'show']);
+    Route::get('/{report}/export', [TechnicalReportController::class, 'export']);
+    
+    // Rutas de escritura (con rate limiting por el costo de LLM)
+    Route::middleware(['throttle:llm_reports:5,1'])->group(function () { // 5 reportes por minuto
+        Route::post('/generate', [TechnicalReportController::class, 'generate']);
+        Route::post('/{report}/regenerate', [TechnicalReportController::class, 'regenerate']);
+    });
+    
+    // Operaciones de gestión
+    Route::middleware(['throttle:10,1'])->group(function () {
+        Route::delete('/{report}', [TechnicalReportController::class, 'destroy']);
     });
 });
 
